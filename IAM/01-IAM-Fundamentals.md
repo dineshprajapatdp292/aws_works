@@ -459,13 +459,26 @@ Grant only the minimum permissions required to perform a task.
 
 # ✅ Practice Questions
 
-- [ ] Should everyone share one administrator account? Why or why not?
-- [ ] Who should receive AdministratorAccess in an organization?
-- [ ] Why are separate IAM identities important during security investigations?
-- [ ] What happens if an IAM User has no permissions attached?
-- [ ] Explain Authentication vs Authorization in your own words.
-- [ ] Why does AWS use Implicit Deny by default?
-- [ ] Explain the Principle of Least Privilege with a real-world example.
+- [x] **Should everyone share one administrator account? Why or why not?**  
+**Answer:** No. Every user should have their own IAM identity for accountability, auditing, and better security. Shared accounts make it impossible to know who performed an action.
+
+- [x] **Who should receive AdministratorAccess in an organization?**  
+**Answer:** Only a small number of trusted cloud or security administrators should have AdministratorAccess. Regular employees should receive only the permissions required for their jobs.
+
+- [x] **Why are separate IAM identities important during security investigations?**  
+**Answer:** Separate identities allow services like CloudTrail to identify exactly who performed an action. This helps with auditing, troubleshooting, and incident investigations.
+
+- [x] **What happens if an IAM User has no permissions attached?**  
+**Answer:** The user cannot access AWS resources because IAM applies an **Implicit Deny** by default. Permissions must be explicitly granted through policies.
+
+- [x] **Explain Authentication vs Authorization in your own words.**  
+**Answer:** Authentication verifies who you are using credentials like a password or access key. Authorization decides what actions you are allowed to perform after you are authenticated.
+
+- [x] **Why does AWS use Implicit Deny by default?**  
+**Answer:** Implicit Deny follows a secure "deny by default" approach, preventing accidental access. Users receive permissions only when they are explicitly allowed.
+
+- [x] **Explain the Principle of Least Privilege with a real-world example.**  
+**Answer:** Least Privilege means giving only the minimum permissions needed to perform a task. For example, a developer who uploads files to S3 should only have S3 upload permission, not AdministratorAccess.
 
 ---
 
