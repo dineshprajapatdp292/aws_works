@@ -1,0 +1,644 @@
+# Part 6: Trust Policies vs Permission Policies
+> **Level:** Intermediate
+
+---
+
+# 📌 Overview
+
+AWS IAM Roles use **two different types of policies**, each serving a completely different purpose:
+
+- **Trust Policy** → Decides **who is allowed to assume (use) the role**.
+- **Permission Policy** → Decides **what actions are allowed after the role has been assumed**.
+
+Understanding the difference between these two policies is one of the most important concepts in AWS IAM because almost every AWS service (EC2, Lambda, ECS, Glue, etc.) relies on IAM Roles and Trust Policies.
+
+---
+
+# 🧠 Core Concepts
+
+---
+
+## 1. Why Do IAM Roles Need a Trust Policy?
+
+### 🟢 Simple Explanation
+
+Imagine a company has a secure Finance Room.
+
+There is a security guard standing at the entrance.
+
+Whenever someone arrives, the guard asks:
+
+> **"Who are you?"**
+
+If your name is on the approved list:
+
+✅ You may enter.
+
+Otherwise:
+
+❌ Access is denied.
+
+That approved list is exactly what a **Trust Policy** does.
+
+It decides:
+
+> **Who is allowed to use the IAM Role.**
+
+---
+
+### 🔵 Technical Explanation
+
+Every IAM Role has a **Trust Policy** attached.
+
+A Trust Policy defines **which principals are allowed to call `sts:AssumeRole`** on that role.
+
+Without a valid Trust Policy:
+
+- No AWS service
+- No IAM User
+- No IAM Role
+- No AWS Account
+
+can assume the role.
+
+---
+
+### ✅ Key Facts
+
+- Trust Policy controls **who can assume the role**
+- Attached only to IAM Roles
+- Contains one or more **Principals**
+- Required for every IAM Role
+- Evaluated **before** Permission Policies
+
+---
+
+## 2. What is a Permission Policy?
+
+### 🟢 Simple Explanation
+
+After someone enters the Finance Room, they still don't have permission to do everything.
+
+For example:
+
+- They may read files.
+- They may print documents.
+- They may not delete payroll data.
+
+This is exactly how a **Permission Policy** works.
+
+It answers:
+
+> **"What actions can this role perform after it has been assumed?"**
+
+---
+
+### 🔵 Technical Explanation
+
+A Permission Policy contains IAM permissions such as:
+
+- S3 access
+- DynamoDB access
+- CloudWatch access
+- Secrets Manager access
+
+These permissions become available **only after** the role has been successfully assumed.
+
+---
+
+### ✅ Key Facts
+
+- Defines allowed AWS API actions
+- Evaluated after the Trust Policy
+- Attached to IAM Roles (or Users/Groups)
+- Uses IAM Actions such as:
+
+```json
+{
+  "Action": [
+    "s3:GetObject",
+    "logs:PutLogEvents"
+  ]
+}
+```
+
+---
+
+## 3. Trust Policy vs Permission Policy
+
+This is one of the most common AWS interview questions.
+
+| Trust Policy | Permission Policy |
+|--------------|-------------------|
+| Decides **who** can use the role | Decides **what** they can do |
+| Contains Principal | Contains Actions and Resources |
+| Checked first | Checked after role assumption |
+| Required for every IAM Role | Grants AWS service permissions |
+| Uses `sts:AssumeRole` | Uses service actions like `s3:GetObject` |
+
+---
+
+## 4. AWS Authorization Flow
+
+Whenever an AWS service wants to use an IAM Role, AWS performs two checks.
+
+### Step 1
+
+AWS asks:
+
+> **Can this principal assume the role?**
+
+AWS checks:
+
+✅ Trust Policy
+
+If the answer is NO:
+
+Access stops immediately.
+
+---
+
+### Step 2
+
+If Trust Policy allows access:
+
+AWS issues temporary credentials.
+
+Now AWS asks:
+
+> **What is this role allowed to do?**
+
+AWS checks:
+
+✅ Permission Policy
+
+Only the allowed permissions are granted.
+
+---
+
+### Overall Flow
+
+```text
+EC2 Instance
+      │
+      ▼
+Trust Policy
+"Can EC2 assume this role?"
+      │
+      ▼
+YES
+      │
+Temporary Credentials
+      │
+      ▼
+Permission Policy
+"What can EC2 do?"
+      │
+      ▼
+Read S3
+Write CloudWatch Logs
+```
+
+---
+
+## 5. Example Trust Policy
+
+A role that only trusts EC2.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+Meaning:
+
+Only EC2 instances are trusted to assume this role.
+
+---
+
+## 6. Trusting Lambda
+
+```json
+{
+  "Principal": {
+    "Service": "lambda.amazonaws.com"
+  }
+}
+```
+
+Meaning:
+
+Only AWS Lambda can assume this role.
+
+---
+
+## 7. Trusting Another AWS Account
+
+```json
+{
+  "Principal": {
+    "AWS": "arn:aws:iam::222222222222:root"
+  }
+}
+```
+
+Meaning:
+
+The specified AWS Account is trusted to assume the role (subject to appropriate permissions on the caller's side).
+
+---
+
+## 8. What is a Principal?
+
+### 🟢 Simple Explanation
+
+A Principal is simply:
+
+> **The identity requesting access.**
+
+AWS asks:
+
+> "Who is requesting to use this role?"
+
+---
+
+### 🔵 Technical Explanation
+
+A Principal may be:
+
+- IAM User
+- IAM Role
+- AWS Service
+- AWS Account
+- Federated User
+- IAM Identity Center User
+
+---
+
+### Example
+
+EC2 wants to use an IAM Role.
+
+The Principal is:
+
+```text
+ec2.amazonaws.com
+```
+
+Lambda wants to use an IAM Role.
+
+The Principal becomes:
+
+```text
+lambda.amazonaws.com
+```
+
+---
+
+## 9. Why Trust Policy Is Required
+
+A role without a Trust Policy is like a room without anyone on the guest list.
+
+No one is trusted.
+
+Therefore:
+
+No one can assume the role.
+
+---
+
+# 🏢 Real-World Scenarios
+
+---
+
+## Scenario 1 — Hotel Security Analogy
+
+Imagine checking into a hotel.
+
+### Reception
+
+The receptionist asks:
+
+> "Are you a registered guest?"
+
+This is the Trust Policy.
+
+Only registered guests may enter.
+
+---
+
+### Room Access
+
+After entering the hotel:
+
+Your room key only opens:
+
+- Your room
+- Gym
+- Swimming Pool
+
+It does NOT open:
+
+- Manager's Office
+- Other guest rooms
+
+This represents the Permission Policy.
+
+---
+
+## Scenario 2 — Production EC2 Failure
+
+A company deployed an EC2 application.
+
+The developers correctly attached an IAM Role.
+
+The Permission Policy allowed:
+
+```text
+s3:GetObject
+```
+
+Everything looked correct.
+
+However, the application could not read from S3.
+
+After investigation they discovered:
+
+The Trust Policy trusted:
+
+```text
+lambda.amazonaws.com
+```
+
+instead of:
+
+```text
+ec2.amazonaws.com
+```
+
+As a result:
+
+EC2 could not assume the role.
+
+No temporary credentials were issued.
+
+Without credentials:
+
+S3 returned:
+
+```text
+AccessDenied
+```
+
+The problem was **not** the Permission Policy.
+
+The problem was the Trust Policy.
+
+---
+
+## Scenario 3 — Real Lambda Production Environment
+
+A company has:
+
+- Order Lambda
+- Payment Lambda
+- Invoice Lambda
+- Notification Lambda
+
+Each Lambda has its own IAM Role.
+
+Every role trusts:
+
+```text
+lambda.amazonaws.com
+```
+
+However, every Permission Policy is different.
+
+### OrderLambdaRole
+
+Permissions:
+
+- Read DynamoDB
+- Write CloudWatch Logs
+
+---
+
+### NotificationLambdaRole
+
+Permissions:
+
+- Publish SNS messages
+- Read Secrets Manager
+
+---
+
+### InvoiceLambdaRole
+
+Permissions:
+
+- Upload invoices to S3
+
+Even though all roles trust Lambda, each role follows the Principle of Least Privilege by granting only the permissions required for its own workload.
+
+---
+
+# ⚠️ Common Mistakes & Misconfigurations
+
+## ❌ Mistake 1 — Confusing Trust Policy and Permission Policy
+
+Incorrect thinking:
+
+> "I'll put S3 permissions inside the Trust Policy."
+
+Wrong.
+
+Trust Policies never grant S3 permissions.
+
+They only decide:
+
+> Who can assume the role.
+
+---
+
+## ❌ Mistake 2 — Trusting Everyone
+
+Example:
+
+```json
+"Principal": "*"
+```
+
+This is dangerous because it may allow unintended identities to attempt to assume the role, depending on the rest of the IAM configuration.
+
+Always trust only the identities or services that actually require the role.
+
+---
+
+## ❌ Mistake 3 — Wrong Service Principal
+
+Suppose an EC2 role contains:
+
+```text
+lambda.amazonaws.com
+```
+
+instead of:
+
+```text
+ec2.amazonaws.com
+```
+
+Result:
+
+- EC2 cannot assume the role.
+- No temporary credentials are issued.
+- The application fails even if the Permission Policy is correct.
+
+---
+
+# 🎯 Interview Angle
+
+## Common Interview Questions
+
+### Q1. What is a Trust Policy?
+
+**Answer:**
+
+A Trust Policy is attached to an IAM Role and defines which principals are allowed to assume that role.
+
+---
+
+### Q2. What is the difference between a Trust Policy and a Permission Policy?
+
+**Answer:**
+
+Trust Policy determines:
+
+> Who can assume the role.
+
+Permission Policy determines:
+
+> What actions are allowed after the role has been assumed.
+
+---
+
+### Q3. What is a Principal?
+
+**Answer:**
+
+A Principal is the identity requesting access.
+
+Examples include:
+
+- IAM User
+- IAM Role
+- AWS Service
+- AWS Account
+- Federated Identity
+
+---
+
+### Q4. What happens if EC2 is not trusted by the role?
+
+**Answer:**
+
+EC2 cannot assume the role.
+
+Since it never receives temporary credentials, every AWS API call (such as S3 access) fails even if the Permission Policy is correct.
+
+---
+
+### Q5. In what order are policies evaluated?
+
+**Answer:**
+
+1. Trust Policy
+2. Temporary Credentials Issued
+3. Permission Policy
+
+---
+
+# ✅ Practice Questions WITH ANSWERS
+
+- [ ] **Question 1**
+
+**Scenario**
+
+You are creating a role called `DataPipelineRole`.
+
+It will be attached to an EC2 instance that reads files from S3 and writes logs to CloudWatch.
+
+**Question**
+
+Which service should the Trust Policy trust?
+
+**Answer**
+
+```text
+ec2.amazonaws.com
+```
+
+Because EC2 is the principal that needs to assume the role.
+
+---
+
+- [ ] **Question 2**
+
+Where should these permissions be placed?
+
+- `s3:GetObject`
+- `logs:PutLogEvents`
+
+**Answer**
+
+Permission Policy
+
+Reason:
+
+Permission Policies define what actions the assumed role is allowed to perform.
+
+---
+
+- [ ] **Question 3**
+
+Suppose someone changes the Trust Policy from:
+
+```text
+ec2.amazonaws.com
+```
+
+to
+
+```text
+lambda.amazonaws.com
+```
+
+What happens?
+
+**Answer**
+
+- EC2 is no longer trusted.
+- EC2 cannot assume the role.
+- AWS does not issue temporary credentials.
+- Every S3 request fails with `AccessDenied`, even though the Permission Policy still allows `s3:GetObject`.
+
+---
+
+# 🔑 Key Takeaways
+
+- **Trust Policy answers:** **Who can assume the IAM Role?**
+- **Permission Policy answers:** **What actions are allowed after the role has been assumed?**
+- AWS always evaluates the **Trust Policy first**, then the **Permission Policy**.
+- A **Principal** is the identity requesting access (IAM User, Role, AWS Service, AWS Account, etc.).
+- If the Trust Policy is incorrect, the role cannot be assumed, and no temporary credentials are issued—even if the Permission Policy is perfectly configured.
