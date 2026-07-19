@@ -1,0 +1,765 @@
+# Part 5: Policy Evaluation Logic
+> **Level:** Intermediate
+
+---
+
+# 📌 Overview
+
+Policy Evaluation Logic is the decision-making process AWS IAM uses whenever a principal (IAM User, IAM Role, AWS Service, etc.) makes a request to access an AWS resource.
+
+Understanding this evaluation flow is one of the most important IAM concepts because **having a permission policy alone does not guarantee access**. AWS evaluates multiple policies in a specific order before making the final decision.
+
+---
+
+# 🧠 Core Concepts
+
+## What is Policy Evaluation Logic?
+
+### Simple Explanation
+
+Whenever someone tries to access an AWS resource, AWS asks a series of questions before allowing the request.
+
+Think of it like airport security.
+
+You don't simply show your ticket and board the airplane.
+
+Security checks:
+
+1. Who are you?
+2. Are you allowed to enter?
+3. Is there any rule blocking you?
+4. Can you finally board?
+
+AWS follows a similar process.
+
+---
+
+### Technical Explanation
+
+Whenever an AWS API request is made, IAM evaluates all applicable policies together before deciding whether the request is allowed or denied.
+
+AWS does **not** simply look for one Allow statement.
+
+Instead, it evaluates:
+
+- Authentication
+- Trust Policies (when assuming roles)
+- Identity-based Policies
+- Resource-based Policies (when applicable)
+- Permission Boundaries (if configured)
+- Service Control Policies (SCPs, if using AWS Organizations)
+- Explicit Deny statements
+
+Then AWS makes a final authorization decision.
+
+---
+
+## The AWS Evaluation Flow
+
+The logical evaluation process is:
+
+```text
+Request
+
+↓
+
+Authenticate Principal
+
+↓
+
+(If using IAM Role)
+Evaluate Trust Policy
+
+↓
+
+Evaluate Identity-Based Policies
+
+↓
+
+Evaluate Resource-Based Policies (if applicable)
+
+↓
+
+Evaluate Permission Boundaries (if present)
+
+↓
+
+Evaluate SCPs (if using AWS Organizations)
+
+↓
+
+Check for Explicit Deny
+
+↓
+
+Final Decision
+```
+
+Every applicable policy participates in the final authorization decision.
+
+---
+
+## Step 1 — Authentication
+
+### Simple Explanation
+
+AWS first verifies the identity making the request.
+
+Examples:
+
+- IAM User
+- IAM Role
+- Federated User
+- AWS Service
+
+If authentication fails:
+
+```text
+Request
+
+↓
+
+Denied
+```
+
+No policy evaluation occurs.
+
+---
+
+### Key Facts
+
+Authentication answers:
+
+> **Who are you?**
+
+Authorization answers:
+
+> **What are you allowed to do?**
+
+---
+
+## Step 2 — Trust Policy Evaluation
+
+This step applies **only** when IAM Roles are involved.
+
+### Simple Explanation
+
+Before AWS checks what permissions a role has, it first checks:
+
+> **Can this principal assume this role?**
+
+---
+
+### Technical Explanation
+
+Every IAM Role contains a Trust Policy.
+
+The Trust Policy defines:
+
+> **Who is allowed to assume the role.**
+
+Example:
+
+```json
+{
+  "Principal": {
+    "Service": "ec2.amazonaws.com"
+  },
+  "Action": "sts:AssumeRole"
+}
+```
+
+Meaning:
+
+- EC2 can assume the role
+- Lambda cannot
+- IAM Users cannot (unless explicitly trusted)
+
+If the Trust Policy denies access:
+
+The principal never receives temporary credentials.
+
+Permission policies are never evaluated.
+
+---
+
+## Step 3 — Identity-Based Policies
+
+### Simple Explanation
+
+Once AWS knows who you are (or after you've successfully assumed a role), it checks:
+
+> What permissions does this identity have?
+
+Examples:
+
+- s3:GetObject
+- s3:PutObject
+- dynamodb:PutItem
+- ec2:StartInstances
+
+---
+
+### Technical Explanation
+
+Identity Policies are attached to:
+
+- IAM Users
+- IAM Groups
+- IAM Roles
+
+These policies define allowed or denied AWS API actions.
+
+Example:
+
+```json
+{
+    "Effect": "Allow",
+    "Action": [
+        "s3:GetObject"
+    ],
+    "Resource": "*"
+}
+```
+
+---
+
+## Step 4 — Resource-Based Policies
+
+### Simple Explanation
+
+Some AWS services also have policies attached directly to the resource.
+
+Examples:
+
+- S3 Bucket Policy
+- SNS Topic Policy
+- SQS Queue Policy
+
+AWS evaluates both:
+
+- Identity Policy
+- Resource Policy
+
+---
+
+### Key Idea
+
+Identity Policy answers:
+
+> What can this identity do?
+
+Resource Policy answers:
+
+> Who can access this resource?
+
+Both can affect the final decision.
+
+---
+
+## Step 5 — Permission Boundaries
+
+### Simple Explanation
+
+Permission Boundaries act like a maximum permission limit.
+
+Even if an IAM User has AdministratorAccess,
+
+the Permission Boundary can still prevent certain actions.
+
+---
+
+### Technical Explanation
+
+Permission Boundaries define the maximum permissions an identity can receive.
+
+Final permissions are limited by:
+
+Identity Policy
+
+AND
+
+Permission Boundary
+
+---
+
+## Step 6 — Service Control Policies (SCPs)
+
+### Simple Explanation
+
+Organizations can centrally restrict AWS accounts.
+
+Even if an administrator grants permissions,
+
+an SCP can still block the action.
+
+---
+
+### Technical Explanation
+
+SCPs apply at the AWS Organization level.
+
+They act as a guardrail.
+
+Accounts cannot exceed permissions allowed by the SCP.
+
+---
+
+## Step 7 — Explicit Deny
+
+### The Most Important Rule
+
+AWS always checks:
+
+> Is there any Explicit Deny?
+
+If yes:
+
+Access is denied immediately.
+
+---
+
+### Priority Order
+
+AWS follows this rule:
+
+```text
+Explicit Deny
+
+↓
+
+Always Wins
+```
+
+Even if:
+
+- IAM User allows
+- IAM Group allows
+- IAM Role allows
+- Resource Policy allows
+
+One Explicit Deny overrides all Allow statements.
+
+---
+
+## Implicit Deny vs Explicit Allow vs Explicit Deny
+
+### Implicit Deny
+
+Every IAM identity starts with:
+
+```text
+No Permissions
+```
+
+AWS automatically treats missing permissions as denied.
+
+Example:
+
+User has no policy.
+
+Result:
+
+```text
+Access Denied
+```
+
+---
+
+### Explicit Allow
+
+Permissions are granted only when an Allow statement exists.
+
+Example:
+
+```json
+{
+    "Effect":"Allow",
+    "Action":"s3:GetObject",
+    "Resource":"*"
+}
+```
+
+Now the action is permitted (assuming nothing else blocks it).
+
+---
+
+### Explicit Deny
+
+Example:
+
+```json
+{
+    "Effect":"Deny",
+    "Action":"s3:*",
+    "Resource":"*"
+}
+```
+
+Even if another policy says:
+
+```json
+{
+    "Effect":"Allow",
+    "Action":"s3:*",
+    "Resource":"*"
+}
+```
+
+Final Result:
+
+```text
+Access Denied
+```
+
+Explicit Deny always wins.
+
+---
+
+## Trust Policy vs Permission Policy
+
+This was one of the most important concepts taught.
+
+| Trust Policy | Permission Policy |
+|--------------|------------------|
+| Defines **who** can assume a role | Defines **what** actions are allowed after assuming the role |
+| Attached only to IAM Roles | Attached to Users, Groups, and Roles |
+| Uses `Principal` | Uses `Action`, `Resource`, and `Effect` |
+| Controls access to the role itself | Controls permissions after the role is assumed |
+
+---
+
+## Principal
+
+A **Principal** is the identity requesting access.
+
+Examples include:
+
+- IAM User
+- IAM Role
+- AWS Service
+- AWS Account
+- Federated User
+
+Example Trust Policy:
+
+```json
+{
+    "Principal": {
+        "Service":"ec2.amazonaws.com"
+    }
+}
+```
+
+Meaning:
+
+EC2 is trusted to assume the role.
+
+---
+
+# 🏢 Real-World Scenarios
+
+## Scenario 1 — EC2 Cannot Access S3
+
+> A company attached an IAM Role to an EC2 instance.
+
+The Permission Policy allowed:
+
+```text
+s3:GetObject
+```
+
+Everything looked correct.
+
+However, the Trust Policy mistakenly trusted:
+
+```text
+lambda.amazonaws.com
+```
+
+instead of:
+
+```text
+ec2.amazonaws.com
+```
+
+Result:
+
+- EC2 could not assume the role.
+- Temporary credentials were never issued.
+- The application received **AccessDenied** errors.
+
+The permissions were correct.
+
+The Trust Policy was wrong.
+
+---
+
+## Scenario 2 — Debugging IAM Problems
+
+A security engineer receives a complaint:
+
+> "My EC2 instance can't access S3."
+
+Instead of immediately checking S3 permissions,
+
+the engineer follows a two-step process.
+
+Step 1:
+
+Can EC2 assume the role?
+
+Check:
+
+- Trust Policy
+
+Step 2:
+
+If yes,
+
+Can the role access S3?
+
+Check:
+
+- Permission Policy
+
+This structured approach quickly identifies whether the problem is identity or permissions.
+
+---
+
+# ⚠️ Common Mistakes & Misconfigurations
+
+### Confusing Trust Policy and Permission Policy
+
+Many beginners place:
+
+```json
+{
+    "Action":"s3:GetObject"
+}
+```
+
+inside a Trust Policy.
+
+This is incorrect.
+
+Trust Policies define **who** may assume a role.
+
+Permission Policies define **what** actions are allowed.
+
+---
+
+### Trusting the Wrong AWS Service
+
+Example:
+
+Trust Policy:
+
+```text
+lambda.amazonaws.com
+```
+
+Role attached to:
+
+```text
+EC2
+```
+
+Result:
+
+EC2 cannot assume the role.
+
+---
+
+### Using an Overly Broad Principal
+
+Example:
+
+```json
+"Principal": "*"
+```
+
+This can unintentionally allow unwanted principals to attempt to assume the role (depending on other permissions and conditions).
+
+Always trust only the identities or AWS services that genuinely require the role.
+
+---
+
+### Assuming Permissions Alone Are Enough
+
+A role may have perfect S3 permissions.
+
+If the Trust Policy blocks access,
+
+the role cannot even be assumed.
+
+No temporary credentials are issued.
+
+---
+
+### Forgetting Policy Evaluation Order
+
+Many engineers immediately inspect permission policies.
+
+Often the real problem is:
+
+- Authentication
+- Trust Policy
+- Explicit Deny
+- SCP
+- Permission Boundary
+
+Understanding the evaluation order saves significant troubleshooting time.
+
+---
+
+# 🎯 Interview Angle
+
+## Common Questions
+
+### What is IAM Policy Evaluation Logic?
+
+Expected Answer:
+
+AWS evaluates all applicable policies—including Trust Policies, Identity Policies, Resource Policies, Permission Boundaries, SCPs, and Explicit Deny statements—to determine whether a request is allowed or denied.
+
+---
+
+### What is the difference between Authentication and Authorization?
+
+Authentication:
+
+> Who are you?
+
+Authorization:
+
+> What are you allowed to do?
+
+---
+
+### What is the difference between a Trust Policy and a Permission Policy?
+
+Trust Policy:
+
+> Who can assume the role?
+
+Permission Policy:
+
+> What can the identity do after assuming the role?
+
+---
+
+### What is a Principal?
+
+A Principal is the identity requesting access.
+
+Examples:
+
+- IAM User
+- IAM Role
+- AWS Service
+- AWS Account
+- Federated User
+
+---
+
+### What happens if the Trust Policy trusts Lambda but the role is attached to EC2?
+
+Answer:
+
+EC2 cannot assume the role.
+
+No temporary credentials are issued.
+
+The application receives AccessDenied errors even if the Permission Policy allows S3 access.
+
+---
+
+### Which wins: Allow or Explicit Deny?
+
+Explicit Deny always wins.
+
+---
+
+# ✅ Practice Questions WITH ANSWERS
+
+- [ ] **Scenario 1**
+
+A role is attached to an EC2 instance.
+
+Which service should the Trust Policy trust?
+
+**Answer:**
+
+`ec2.amazonaws.com`
+
+---
+
+- [ ] **Scenario 2**
+
+Where should these permissions be placed?
+
+- `s3:GetObject`
+- `logs:PutLogEvents`
+
+**Answer:**
+
+Permission Policy
+
+Because they define **what actions** the principal can perform after assuming the role.
+
+---
+
+- [ ] **Scenario 3**
+
+The Trust Policy is changed from:
+
+```text
+ec2.amazonaws.com
+```
+
+to
+
+```text
+lambda.amazonaws.com
+```
+
+The role is still attached to an EC2 instance.
+
+What happens?
+
+**Answer:**
+
+EC2 can no longer assume the role.
+
+AWS does not issue temporary credentials.
+
+The EC2 application cannot access S3, even though the Permission Policy still allows `s3:GetObject`.
+
+---
+
+- [ ] **Scenario 4**
+
+A role contains:
+
+- Allow: `s3:*`
+
+Another applicable policy contains:
+
+- Deny: `s3:*`
+
+Which policy wins?
+
+**Answer:**
+
+Explicit Deny always wins.
+
+---
+
+# 🔑 Key Takeaways
+
+- **AWS evaluates multiple policies together before making an authorization decision.**
+- **Trust Policies answer "Who can assume this role?" while Permission Policies answer "What can they do after assuming it?"**
+- **A role with correct permissions is useless if the Trust Policy does not allow the principal to assume it.**
+- **Explicit Deny always overrides every Allow statement.**
+- **A disciplined troubleshooting approach is: Authentication → Trust Policy → Permission Policy → Explicit Deny → Other policy types (Permission Boundaries, SCPs, Resource Policies).**
